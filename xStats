@@ -1,0 +1,122 @@
+suppressMessages(library(rdrop2))
+suppressMessages(library(plyr))
+suppressMessages(library(dplyr))
+suppressMessages(library(tidyr))
+suppressMessages(library(tidyselect))
+suppressMessages(library(tidyverse))
+suppressMessages(library(data.table))
+
+setwd('~/Desktop/Research/')
+
+options(scipen = FALSE)
+
+drop_auth(
+  new_user = FALSE,
+  key = "i3ywecm2mjs65x9",
+  secret = "pmuhxtcb50yct5a",
+  cache = TRUE,
+  rdstoken = '~/Desktop/Iowa Baseball/iowa_db_token.rds'
+)
+
+file_path <- '~/Desktop/Iowa Baseball'
+
+
+source(paste0(file_path, "/GitHub/hawkeye_functions/handling_trackman_functions.R"))
+iowa_db_token <- readRDS(paste0(file_path, "/iowa_db_token.RDS"))
+
+#Import statcast data
+import_statcast_season(2022)
+import_statcast_season(2023)
+
+#change variable names
+statcast23 <- statcast2023 %>%
+  rename(
+    rel_side = release_pos_x,
+    rel_height = release_pos_z,
+    horz_break = pfx_x,
+    induced_vert_break = pfx_z,
+    plate_loc_side = plate_x,
+    plate_loc_height = plate_z,
+    xwoba = estimated_woba_using_speedangle,
+    rel_speed = release_speed,
+    batter_name = player_name.y,
+    pitcher_name = player_name.x,
+    extension = release_extension
+  ) %>%
+  select(rel_side, rel_height, horz_break, induced_vert_break, plate_loc_side, plate_loc_height, extension, xwoba, woba_value, rel_speed,
+         launch_angle, launch_speed, batter_name, pitcher_name, pitch_type, events)
+
+statcast22 <- statcast2022 %>%
+  rename(
+    plate_loc_side = plate_x,
+    plate_loc_height = plate_z,
+    xwoba = estimated_woba_using_speedangle,
+    rel_speed = release_speed,
+    extension = release_extension
+  ) %>%
+  select(rel_side, rel_height, horz_break, induced_vert_break, plate_loc_side, plate_loc_height, extension, xwoba, woba_value, rel_speed,
+         launch_angle, launch_speed, batter_name, pitcher_name, pitch_type, events)
+
+#merge data
+statcast_full <- rbind(statcast22, statcast23) %>%
+  filter(extension <= 9, pitch_type != 'EP', rel_speed >= 65)
+
+df_train <- statcast_full %>%
+  filter(!is.na(woba_value)) %>%
+  mutate(Single = ifelse(events == "single", 1, 0),
+         Double = ifelse(events == "double", 1, 0),
+         Triple = ifelse(events == "triple", 1, 0),
+         HomeRun = ifelse(events == "home_run", 1, 0),
+         Out = ifelse(events %in% c('field_out', 'catcher_interf', 'field_error', 'double_play', 
+                                   'fielders_choice', 'fielders_choice_out', 'force_out', 
+                                   'grounded_into_double_play', 'other_out', 'strikeout_double_play', 
+                                   'strikeout'), 1, 0)) %>%
+  select(launch_speed, launch_angle, woba_value, Single, Double, Triple, HomeRun, Out, xwoba)
+
+#train model for xstats
+addTaskCallback(function(...) {set.seed(123); TRUE})
+
+dt <- sample(nrow(df_train), 0.7*nrow(df_train))
+train <- df_train[dt,]
+test <- df_train[-dt,]
+
+model_xsingle <- mgcv::gam(Single ~ s(launch_speed, launch_angle), data = train, family = binomial, method = "REML")
+model_xdouble <- mgcv::gam(Double ~ s(launch_speed, launch_angle), data = train, family = binomial, method = "REML")
+model_xtriple <- mgcv::gam(Triple ~ s(launch_speed, launch_angle), data = train, family = binomial, method = "REML")
+model_xhomerun <- mgcv::gam(HomeRun ~ s(launch_speed, launch_angle), data = train, family = binomial, method = "REML")
+model_xout <- mgcv::gam(Out ~ s(launch_speed, launch_angle), data = train, family = binomial, method = "REML")
+model_xwoba <- mgcv::gam(woba_value ~ s(launch_speed, launch_angle), data = train)
+
+#test model for xstats
+test$xsingle <- predict(model_xsingle, test, type = "response")
+test$xdouble <- predict(model_xdouble, test, type = "response")
+test$xtriple <- predict(model_xtriple, test, type = "response")
+test$xhomerun <- predict(model_xhomerun, test, type = "response")
+test$xout <- predict(model_xout, test, type = "response")
+test$xba <- with(test, xsingle / (xsingle + xdouble + xtriple + xhomerun + xout) +
+                   xdouble / (xsingle + xdouble + xtriple + xhomerun + xout) +
+                   xtriple / (xsingle + xdouble + xtriple + xhomerun + xout) +
+                   xhomerun / (xsingle + xdouble + xtriple + xhomerun + xout))
+test$xslg <- with(test, xsingle / (xsingle + xdouble + xtriple + xhomerun + xout) +
+                    2*xdouble / (xsingle + xdouble + xtriple + xhomerun + xout) +
+                    3*xtriple / (xsingle + xdouble + xtriple + xhomerun + xout) +
+                    4*xhomerun / (xsingle + xdouble + xtriple + xhomerun + xout))
+test$xwOBA_new <- predict(model_xwoba, test)
+
+
+
+#save models
+save(model_xsingle, file = "~/Desktop/Research/Models/model_xsingle.RDS")
+save(model_xdouble, file = "~/Desktop/Research/Models/model_xdouble.RDS")
+save(model_xtriple, file = "~/Desktop/Research/Models/model_xtriple.RDS")
+save(model_xhomerun, file = "~/Desktop/Research/Models/model_homerun.RDS")
+save(model_xout, file = "~/Desktop/Research/Models/model_xout.RDS")
+save(model_xba, file = "~/Desktop/Research/Models/model_xba.RDS")
+save(model_xslg, file = "~/Desktop/Research/Models/model_xslg.RDS")
+save(model_xwoba_new, file = "~/Desktop/Research/Models/model_xwoba_new.RDS")
+
+
+
+
+
+
