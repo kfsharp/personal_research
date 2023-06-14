@@ -1,0 +1,1084 @@
+suppressMessages(library(plyr))
+suppressMessages(library(dplyr))
+suppressMessages(library(tidyr))
+suppressMessages(library(tidyselect))
+suppressMessages(library(tidyverse))
+suppressMessages(library(data.table))
+suppressMessages(library(png))
+suppressMessages(library(ggpubr))
+suppressMessages(library(grid))
+suppressMessages(library(gridExtra))
+suppressMessages(library(gtable))
+suppressMessages(library(cowplot))
+suppressMessages(library(showtext))
+suppressMessages(library(sysfonts))
+suppressMessages(library(condformat))
+suppressMessages(library(scales))
+suppressMessages(library(ggforce))
+suppressMessages(library(numform))
+suppressMessages(library(ggimage))
+suppressMessages(library(ggrepel))
+suppressMessages(library(formattable))
+suppressMessages(library(priceR))
+
+#Remove Scientific Notation
+options(scipen=999)
+
+user <- "Keithan"
+League <- "Prospect League"
+Season <- 2022
+selected_teams <- c("Jackson Rockabillys", 'Clinton LumberKings', 'Cape Catfish', 'Alton River Dragons', "O'Fallon Hoots", 'Johnstown Mill Rats', 'Lafayette Aviators', 'Champion City Kings')
+
+dark_green <- '#00b050'
+dark_red <- '#ff0000'
+
+if (user == 'Keithan') {
+  wd <- ('~/Desktop/Prospect League/')
+  local_report_folder <- ('~/Desktop/Prospect League/')
+}
+
+#Load in data
+survey_data<- read.csv("~/Desktop/Prospect League/pltv_spring_survey.csv")
+team_logos <- read.csv("~/Desktop/Prospect League/prospect_league_logos.csv")
+
+#Change zeros to NA
+survey_data[survey_data == 0] <- NA
+
+#Add logos to data
+survey_data <- left_join(survey_data, team_logos, by = 'team_name')
+
+font_add("avenir", regular = as.character("supporting_files/avenir_book.otf"), bold = as.character("supporting_files/avenir_black.otf"))
+font_add("avenir_bold", regular = as.character("supporting_files/avenir_black.otf"))
+showtext_auto()
+
+league_logo <- readPNG(as.character("~/Desktop/Prospect League/prospect_league_logo.PNG"))
+league_logo <- rasterGrob(league_logo)
+
+league_financial_report <- function(team) {
+  
+  report <- paste("2022 Financial Review")
+
+  line_grob <- gTree(children = gList(linesGrob(x = c(.05, .95), y = c(.5, .5), gp = gpar(lwd = 2, col = "black", fill = NA))))
+  
+  table_theme <- ttheme_default(
+    core = list(bg_params = list(fill = c("gray95", "gray90"))),
+    colhead = list(fg_params = list(col = "#FFFFFF", fontfamily = "avenir"), bg_params = list(fill = "#041E42"), padding = unit.c(unit(8, "mm"), unit(5, "mm"))),
+    rowhead = list(fg_params = list(fontfamily = "avenir"))
+  )
+  
+  #######################
+  ##### COVER PAGE ######
+  #######################
+  
+  create_cover <- function() {
+    
+    text_report <- text_grob(report, just = "center", face = "plain", color = "black", size = 50, family = "avenir_bold")
+    
+    text_report <- plot_grid(NULL, text_report, NULL, ncol = 3, rel_widths = c(1/10, 8/10, 1/10))
+    
+    league_logo <- plot_grid(NULL, league_logo, NULL, ncol = 3, rel_widths = c(1/10, 8/10, 1/10))
+    
+    final_cover <- plot_grid(NULL, line_grob, NULL, text_report, NULL, league_logo, NULL, line_grob, NULL, 
+                             nrow = 9, rel_heights = c(0.25/10, 0.50/10, 0.5/10, 1.5/10, 0.75/10, 5/10, 0.75/10, 0.25/10, 0.50/10))
+    
+    return(final_cover)
+  
+  }
+  
+  cover_page <- create_cover()
+  
+  #################################    
+  ### Expense and Revenue Page ####
+  ################################# 
+  
+  create_page_two <- function() {
+    
+    #Team Expenses and Revenue
+    spending_plot <- ggplot(data = survey_data, aes(x = total_revenue, y = total_expenses)) +
+      geom_image(aes(image = team_logo), size=.1) +
+      theme_bw() +
+      scale_x_continuous(breaks=seq(0, 6000, 500)) +
+      scale_y_continuous(breaks=seq(0, 2000, 250)) +
+      labs(x = "Total Revenue (K)", y = "Total Expenses (K)", title = "Team Expenses and Revenue") +
+      theme(plot.title = element_text(size = 26, face = "bold", hjust = 0.5), axis.text = element_text(size = 16), axis.title=element_text(size=20,face="bold"))
+    
+    ### FORMAT Title
+    
+    page_two_title <- paste("Team Expenses and Revenue", Season)
+    
+    page_two_title <- text_grob(page_two_title, just = "left", face = "plain", color = "black", size = 26, family = "avenir_bold")
+    
+    page_two_title <- plot_grid(page_two_title, NULL, ncol = 2, rel_widths = c(.75/10, 9.25/10))
+    
+    page_two_title <- plot_grid(NULL, page_two_title, nrow = 2, rel_heights = c(1/10, 9/10))
+    
+  
+    #Format Plots
+    
+    format_page <- plot_grid(NULL, spending_plot, NULL,
+                             nrow = 3, rel_heights = c(0.25/10, 9.5/10, 0.25/10))
+    
+    format_page <- plot_grid(NULL, spending_plot, NULL,
+                             ncol = 3, rel_widths = c(0.5/10, 9/10, 0.5/10))
+    
+    ### FOOTER FORMAT
+    
+    text_report_footer <- paste0(" Team Expenses and Revenue")
+    
+    text_report_footer <- text_grob(text_report_footer, just = "left", face = "plain", color = "black", size = 12, family = "avenir")
+    
+    text_report <- paste("Prospect League 2022 Financial Review")
+    
+    text_report <- text_grob(text_report, just = "center", face = "plain", color = "black", size = 12, family = "avenir")
+
+    footer <- plot_grid(NULL, text_report_footer, NULL, text_report, NULL, league_logo, NULL,
+                        ncol = 7, rel_widths = c(0.35/10, 0.5/10, 4/10, 1/10, 3/10, 1/10, 0.15/10))
+    
+    
+    #Format everything together
+    final_arrange <- plot_grid(page_two_title, format_page, footer,
+                                 nrow = 3, rel_heights = c(.5/10, 8.75/10, .75/10))
+    
+    page_two <- plot_grid(NULL, final_arrange, NULL,
+                             nrow = 3, rel_heights = c(0.1/10, 9.8/10, 0.1/10))
+    
+    return(page_two)
+    
+  }
+  
+  final_page_two <- create_page_two()
+  
+  
+  #################################    
+  ### Profit and Winning % Page ####
+  ################################# 
+  
+  create_page_three <- function() {
+    
+    #Team Profit and Winning %
+    profit_plot <- ggplot(data = survey_data, aes(x = total_profit, y = win_percent)) +
+      geom_image(aes(image = team_logo), size=.1) +
+      theme_bw() +
+      geom_vline(xintercept = 0, color = 'red', size = 1.5) +
+      labs(x = "Total Profit (K)", y = "Winning %", title = "Winning % and Profit") +
+      theme(plot.title = element_text(size = 26, face = "bold", hjust = 0.5), axis.text = element_text(size = 16), axis.title=element_text(size=20,face="bold"))
+    
+    
+    
+    ### FORMAT Title
+    
+    page_three_title <- paste("Team Profit and Wins", Season)
+    
+    page_three_title <- text_grob(page_three_title, just = "left", face = "plain", color = "black", size = 26, family = "avenir_bold")
+    
+    page_three_title <- plot_grid(page_three_title, NULL, ncol = 2, rel_widths = c(.75/10, 9.25/10))
+    
+    page_three_title <- plot_grid(NULL, page_three_title, nrow = 2, rel_heights = c(1/10, 9/10))
+    
+    
+    #Format Plots
+    
+    format_page_top <- plot_grid(NULL, profit_plot, NULL,
+                             nrow = 3, rel_heights = c(0.25/10, 9.5/10, 0.25/10))
+    
+    format_page <- plot_grid(NULL, format_page_top, NULL,
+                                 ncol = 3, rel_widths = c(0.6/10, 8.8/10, 0.6/10))
+    
+    ### FOOTER FORMAT
+    
+    text_report_footer <- paste0(" Team Profit and Wins")
+    
+    text_report_footer <- text_grob(text_report_footer, just = "left", face = "plain", color = "black", size = 12, family = "avenir")
+    
+    text_report <- paste("Prospect League 2022 Financial Review")
+    
+    text_report <- text_grob(text_report, just = "center", face = "plain", color = "black", size = 12, family = "avenir")
+    
+    footer <- plot_grid(NULL, text_report_footer, NULL, text_report, NULL, league_logo, NULL,
+                        ncol = 7, rel_widths = c(0.35/10, 0.5/10, 4/10, 1/10, 3/10, 1/10, 0.15/10))
+    
+    
+    #Format everything together
+    final_arrange <- plot_grid(page_three_title, format_page, footer,
+                               nrow = 3, rel_heights = c(.5/10, 8.25/10, .75/10))
+    
+    page_three <- plot_grid(NULL, final_arrange, NULL,
+                          nrow = 3, rel_heights = c(0.1/10, 9.8/10, 0.1/10))
+    
+    
+    return(page_three)
+    
+  }
+  
+  final_page_three <- create_page_three()
+  
+  
+  #########################  
+  ### Fan Revenue Page ####
+  ######################### 
+  
+  create_page_four <- function() {
+    
+    #Market Size and Fan Revenue
+    fan_plot <- ggplot(data = survey_data, aes(x = sponsorship_revenue, y = fan_revenue, size = city_population, label = team_name, color = )) +
+      geom_point(aes(), color=ifelse(survey_data$total_profit < 0, '#ff4d4d', '#00e367')) +
+      geom_label_repel(aes(label = team_name),
+                       box.padding   = 0.35, 
+                       point.padding = 0.5,
+                       segment.color = 'grey50',
+                       size = 5) +
+      theme_bw() +
+      labs(x = "Sponsorship Revenue (K)", y = "Fan Revenue (K)", title = "Fan and Sponsor Breakdown", size = "Market Size", subtitle = "Red = No Profit, Green = Profitable", caption = "Fan Revenue comprises tickets, merchandise, and concessions") +
+      theme(plot.title = element_text(size = 26, face = "bold", hjust = 0.5), axis.text = element_text(size = 16), axis.title=element_text(size=20,face="bold")) +
+      theme(plot.caption = element_text(color = "blue", face = "plain")) +
+      scale_x_continuous(breaks=seq(70, 390, 50))
+    
+    
+    ### FORMAT Title
+    
+    page_four_title <- paste("Fan Revenue and Market Size", Season)
+    
+    page_four_title <- text_grob(page_four_title, just = "left", face = "plain", color = "black", size = 26, family = "avenir_bold")
+    
+    page_four_title <- plot_grid(page_four_title, NULL, ncol = 2, rel_widths = c(.75/10, 9.25/10))
+    
+    page_four_title <- plot_grid(NULL, page_four_title, nrow = 2, rel_heights = c(1/10, 9/10))
+    
+    
+    #Format Plots
+    
+    format_page_top <- plot_grid(NULL, fan_plot, NULL,
+                                 nrow = 3, rel_heights = c(0.25/10, 9.5/10, 0.25/10))
+    
+    format_page <- plot_grid(NULL, format_page_top, NULL,
+                             ncol = 3, rel_widths = c(0.6/10, 8.8/10, 0.6/10))
+    
+    ### FOOTER FORMAT
+    
+    text_report_footer <- paste0(" Fan Revenue and Market Size")
+    
+    text_report_footer <- text_grob(text_report_footer, just = "left", face = "plain", color = "black", size = 12, family = "avenir")
+    
+    text_report <- paste("Prospect League 2022 Financial Review")
+    
+    text_report <- text_grob(text_report, just = "center", face = "plain", color = "black", size = 12, family = "avenir")
+    
+    footer <- plot_grid(NULL, text_report_footer, NULL, text_report, NULL, league_logo, NULL,
+                        ncol = 7, rel_widths = c(0.35/10, 0.5/10, 4/10, 1/10, 3/10, 1/10, 0.15/10))
+    
+    
+    #Format everything together
+    final_arrange <- plot_grid(page_four_title, format_page, footer,
+                               nrow = 3, rel_heights = c(.5/10, 8.75/10, .75/10))
+    
+    page_four <- plot_grid(NULL, final_arrange, NULL,
+                            nrow = 3, rel_heights = c(0.1/10, 9.8/10, 0.1/10))
+    
+    
+    return(page_four)
+    
+  }
+  
+  final_page_four <- create_page_four()
+  
+  
+  #########################    
+  ### Team Table Page ####
+  #########################
+  
+  create_team_breakdown_page <- function(team) {
+    
+    #Organize table data
+    table_data <- survey_data %>%
+      mutate(
+        sponsorship_revenue = sponsorship_revenue * 1000,
+        ticket_revenue = ticket_revenue * 1000,
+        merchandise_revenue = merchandise_revenue * 1000,
+        concession_revenue = concession_revenue * 1000
+      )
+    
+    #Personnel Table
+    personnel <- table_data %>%
+      filter(team_name == team) %>%
+      select(head_coach_salary, assistant_coach_total_salary, office_staff, pltv_staff, interns)
+    
+    personnel$'Head Coach Salary' <- currency(personnel$head_coach_salary, digits = 0L)
+    personnel$'Assistant Coach Total Salaries' <- format_dollars(personnel$assistant_coach_total_salary)
+    
+    personnel <- personnel %>% select(-c(head_coach_salary, assistant_coach_total_salary))
+    
+    personnel <- personnel %>%
+      rename('Office Staff' = office_staff,
+            'PLTV Staff' = pltv_staff,
+            'Interns' = interns
+      )
+    
+      personnel <- personnel[, c(4, 5, 1, 2, 3)]
+    
+    
+    #Revenue Table
+    revenue <- table_data %>%
+      filter(team_name == team) %>%
+      select(operating_revenue, ticket_revenue, merchandise_revenue, concession_revenue, sponsorship_revenue, other_revenue)
+    
+    revenue$'Operating Revenue' <- currency(revenue$operating_revenue, digits = 0L)
+    revenue$'Ticket Revenue' <- currency(revenue$ticket_revenue, digits = 0L)
+    revenue$'Merchandise Revenue' <- currency(revenue$merchandise_revenue, digits = 0L)
+    revenue$'Concession Revenue' <- currency(revenue$concession_revenue, digits = 0L)
+    revenue$'Sponsorship Revenue' <- currency(revenue$sponsorship_revenue, digits = 0L)
+    revenue$'Other Revenue' <-  format_dollars(revenue$other_revenue)
+    
+    revenue <- revenue %>% select(-c(operating_revenue, ticket_revenue, merchandise_revenue, concession_revenue, sponsorship_revenue, other_revenue))
+    
+    #Expense Table
+    expenses <- table_data %>%
+      filter(team_name == team) %>%
+      select(operating_expenses, baseball_operations_expenses, personnel_costs, marketing_costs, office_expenses, travel_expenses, stadium_rental_costs)
+    
+    expenses$'Operating Expenses' <- currency(expenses$operating_expenses, digits = 0L)
+    expenses$'Baseball Ops Expenses' <- currency(expenses$baseball_operations_expenses, digits = 0L)
+    expenses$'Personnel Costs' <- currency(expenses$personnel_costs, digits = 0L)
+    expenses$'Marketing Costs' <- currency(expenses$marketing_costs, digits = 0L)
+    expenses$'Travel' <- currency(expenses$travel_expenses, digits = 0L)
+    expenses$'Stadium Costs' <- format_dollars(expenses$stadium_rental_costs)
+  
+    expenses <- expenses %>% select(-c(operating_expenses, baseball_operations_expenses, personnel_costs, marketing_costs, office_expenses, travel_expenses, stadium_rental_costs))
+      
+    
+    # Table: Revenue
+    
+    table_align_revenue <- tableGrob(revenue, rows = NULL, theme = table_theme)
+    
+    table_align_revenue <- gtable_add_grob(table_align_revenue, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_revenue), l = 1, r = ncol(table_align_revenue))
+    
+    table_align_revenue <- gtable_add_grob(table_align_revenue, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_revenue))
+    
+    #Color Operating Revenue
+    for (c in 1:1) {
+      if (length(which(revenue[,c] <= 335000) + 1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] <= 335000)+1, column = c, linewidth = 4,
+                                              fill="salmon", color = "red")
+      }
+      if (length(which(revenue[,c] >= 973500)+1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] >= 973500)+1, column = c, linewidth = 4,
+                                              fill="darkolivegreen1", color = "darkolivegreen4")
+      }
+      if (length(which(revenue[,c] > 335000 & revenue[,c] < 973500)+1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] > 353500 & revenue[,c] < 973500)+1, column = c, linewidth = 4,
+                                              fill="gray95", color = "gray90")
+      }
+    }
+    #Color Ticket Revenue
+    for (c in 2:2) {
+      if (length(which(revenue[,c] <= 70255) + 1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] <= 70255)+1, column = c, linewidth = 4,
+                                             fill="salmon", color = "red")
+      }
+      if (length(which(revenue[,c] >= 159145)+1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] >= 159145)+1, column = c, linewidth = 4,
+                                             fill="darkolivegreen1", color = "darkolivegreen4")
+      }
+      if (length(which(revenue[,c] > 70255 & revenue[,c] < 159145)+1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] > 70255 & revenue[,c] < 159145)+1, column = c, linewidth = 4,
+                                             fill="gray95", color = "gray90")
+      }
+    }
+    #Color Merchandise Revenue
+    for (c in 3:3) {
+      if (length(which(revenue[,c] <= 21152) + 1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] <= 21152)+1, column = c, linewidth = 4,
+                                             fill="salmon", color = "red")
+      }
+      if (length(which(revenue[,c] >= 47500)+1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] >= 47500)+1, column = c, linewidth = 4,
+                                             fill="darkolivegreen1", color = "darkolivegreen4")
+      }
+      if (length(which(revenue[,c] > 21152 & revenue[,c] < 47500)+1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] > 21152 & revenue[,c] < 47500)+1, column = c, linewidth = 4,
+                                             fill="gray95", color = "gray90")
+      }
+    }
+    #Color Concession Revenue
+    for (c in 4:4) {
+      if (length(which(revenue[,c] <= 81255) + 1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] <= 81255)+1, column = c, linewidth = 4,
+                                             fill="salmon", color = "red")
+      }
+      if (length(which(revenue[,c] >= 290270)+1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] >= 290270)+1, column = c, linewidth = 4,
+                                             fill="darkolivegreen1", color = "darkolivegreen4")
+      }
+      if (length(which(revenue[,c] > 81255 & revenue[,c] < 290270)+1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] > 81255 & revenue[,c] < 290270)+1, column = c, linewidth = 4,
+                                             fill="gray95", color = "gray90")
+      }
+    }
+    #Color Sponsorship Revenue
+    for (c in 5:5) {
+      if (length(which(revenue[,c] <= 108325) + 1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] <= 108325)+1, column = c, linewidth = 4,
+                                             fill="salmon", color = "red")
+      }
+      if (length(which(revenue[,c] >= 325000)+1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] >= 325000)+1, column = c, linewidth = 4,
+                                             fill="darkolivegreen1", color = "darkolivegreen4")
+      }
+      if (length(which(revenue[,c] > 108325 & revenue[,c] < 325000)+1) >= 1) {
+        table_align_revenue <- table_cell_bg(table_align_revenue, row = which(revenue[,c] > 108325 & revenue[,c] < 325000)+1, column = c, linewidth = 4,
+                                             fill="gray95", color = "gray90")
+      }
+    }
+
+    format_table_revenue <- plot_grid(NULL, table_align_revenue, NULL, ncol = 3, rel_widths = c(1/10, 7/10, 2/10))
+    
+    format_table_revenue <- plot_grid(NULL,  format_table_revenue, NULL, nrow = 3, rel_heights = c(1/10, 1/10, 8/10))
+    
+  
+    
+    # Table: Expenses
+    
+    table_align_expenses <- tableGrob(expenses, rows = NULL, theme = table_theme)
+    
+    table_align_expenses <- gtable_add_grob(table_align_expenses, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_expenses), l = 1, r = ncol(table_align_expenses))
+    
+    table_align_expenses <- gtable_add_grob(table_align_expenses, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_expenses))
+
+    
+    #Color Operating Expenses
+    for (c in 1:1) {
+      if (length(which(expenses[,c] >= 820211) + 1) >= 1) {
+        table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] >= 820211)+1, column = c, linewidth = 4,
+                                                     fill="salmon", color = "red")
+      }
+      if (length(which(expenses[,c] <= 353500)+1) >= 1) {
+        table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] <= 353500)+1, column = c, linewidth = 4,
+                                                     fill="darkolivegreen1", color = "darkolivegreen4")
+      }
+    if (length(which(expenses[,c] > 353500 & expenses[,c] < 820211)+1) >= 1) {
+      table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] > 353500 & expenses[,c] < 820211)+1, column = c, linewidth = 4,
+                                            fill="gray95", color = "gray90")
+    }
+  }
+    #Color Baseball Ops Expenses
+    for (c in 2:2) {
+      if (length(which(expenses[,c] >= 182493) + 1) >= 1) {
+        table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] >= 182493)+1, column = c, linewidth = 4,
+                                              fill="salmon", color = "red")
+      }
+      if (length(which(expenses[,c] <= 110125)+1) >= 1) {
+        table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] <= 110125)+1, column = c, linewidth = 4,
+                                              fill="darkolivegreen1", color = "darkolivegreen4")
+      }
+      if (length(which(expenses[,c] > 110125 & expenses[,c] < 182493)+1) >= 1) {
+        table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] > 110125 & expenses[,c] < 182493)+1, column = c, linewidth = 4,
+                                              fill="gray95", color = "gray90")
+      }
+    }
+    #Color Personnel Costs
+    for (c in 3:3) {
+      if (length(which(expenses[,c] >= 227500) + 1) >= 1) {
+        table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] >= 227500)+1, column = c, linewidth = 4,
+                                              fill="salmon", color = "red")
+      }
+      if (length(which(expenses[,c] <= 111068)+1) >= 1) {
+        table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] <= 111068)+1, column = c, linewidth = 4,
+                                              fill="darkolivegreen1", color = "darkolivegreen4")
+      }
+      if (length(which(expenses[,c] > 111068 & expenses[,c] < 227500)+1) >= 1) {
+        table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] > 111068 & expenses[,c] < 227500)+1, column = c, linewidth = 4,
+                                              fill="gray95", color = "gray90")
+      }
+    }
+    #Color Marketing Costs
+    for (c in 4:4) {
+      if (length(which(expenses[,c] >= 92500) + 1) >= 1) {
+        table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] >= 92500)+1, column = c, linewidth = 4,
+                                              fill="salmon", color = "red")
+      }
+      if (length(which(expenses[,c] <= 10900)+1) >= 1) {
+        table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] <= 10900)+1, column = c, linewidth = 4,
+                                              fill="darkolivegreen1", color = "darkolivegreen4")
+      }
+      if (length(which(expenses[,c] > 10900 & expenses[,c] < 92500)+1) >= 1) {
+        table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] > 10900 & expenses[,c] < 92500)+1, column = c, linewidth = 4,
+                                              fill="gray95", color = "gray90")
+      }
+    }
+    #Color Travel Costs
+    for (c in 5:5) {
+      if (length(which(expenses[,c] >= 61483) + 1) >= 1) {
+        table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] >= 61483)+1, column = c, linewidth = 4,
+                                              fill="salmon", color = "red")
+      }
+      if (length(which(expenses[,c] <= 46000)+1) >= 1) {
+        table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] <= 46000)+1, column = c, linewidth = 4,
+                                              fill="darkolivegreen1", color = "darkolivegreen4")
+      }
+      if (length(which(expenses[,c] > 46000 & expenses[,c] < 61483)+1) >= 1) {
+        table_align_expenses <- table_cell_bg(table_align_expenses, row = which(expenses[,c] > 46000 & expenses[,c] < 61483)+1, column = c, linewidth = 4,
+                                              fill="gray95", color = "gray90")
+      }
+    }
+    
+    format_table_expenses <- plot_grid(NULL, table_align_expenses, NULL, ncol = 3, rel_widths = c(1/10, 6/10, 3/10))
+    
+    format_table_expenses <- plot_grid(NULL,  format_table_expenses, NULL, nrow = 3, rel_heights = c(1/10, 1/10, 8/10))
+    
+    
+    
+    # Table: Personnel
+    
+    table_align_personnel <- tableGrob(personnel, rows = NULL, theme = table_theme)
+    
+    table_align_personnel <- gtable_add_grob(table_align_personnel, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_personnel), l = 1, r = ncol(table_align_personnel))
+    
+    table_align_personnel <- gtable_add_grob(table_align_personnel, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_personnel))
+
+    format_table_personnel <- plot_grid(NULL, table_align_personnel, NULL, ncol = 3, rel_widths = c(1/10, 4.7/10, 4.3/10))
+    
+    format_table_personnel <- plot_grid(NULL,  format_table_personnel, NULL, nrow = 3, rel_heights = c(1/10, 1/10, 8/10))
+    
+    
+    ### FORMAT PAGE ###
+    
+    vizi_title <- paste0(team, " 2022")
+    
+    vizi_title <- text_grob(vizi_title, just = "left", face = "plain", color = "black", size = 31.5, family = "avenir_bold")
+
+    table_title_revenue <- paste(team, "Revenue")
+    
+    table_title_revenue<- text_grob(table_title_revenue, just = "left", face = "plain", color = "black", size = 17, family = "avenir_bold")
+    
+    table_title_revenue <- plot_grid(table_title_revenue, NULL, ncol = 2, rel_widths = c(.75/10, 9.25/10))
+    
+    table_title_expenses <- paste(team, "Expenses")
+    
+    table_title_expenses <- text_grob(table_title_expenses, just = "left", face = "plain", color = "black", size = 17, family = "avenir_bold")
+    
+    table_title_expenses <- plot_grid(table_title_expenses, NULL, ncol = 2, rel_widths = c(.75/10, 9.25/10))
+    
+    table_title_personnel <- paste(team, "Personnel")
+    
+    table_title_personnel <- text_grob(table_title_personnel, just = "left", face = "plain", color = "black", size = 17, family = "avenir_bold")
+    
+    table_title_personnel <- plot_grid(table_title_personnel, NULL, ncol = 2, rel_widths = c(.75/10, 9.25/10))
+    
+    titles_vizi <- plot_grid(NULL, vizi_title, nrow = 2, rel_heights = c(0.25/10, 9.75/10))
+    
+    titles_vizi <- plot_grid(titles_vizi, NULL, ncol = 2, rel_widths = c(.75/10, 9.25/10))
+    
+    ### FORMAT FOOTER
+    
+    text_report_team <- paste(team, "Breakdown")
+    
+    text_report_team <- text_grob(text_report_team, just = "left", face = "plain", color = "black", size = 12, family = "avenir")
+    
+    text_report <- paste("Prospect League 2022 Financial Review")
+    
+    text_report <- text_grob(text_report, just = "center", face = "plain", color = "black", size = 12, family = "avenir")
+
+    footer <- plot_grid(NULL, text_report_team, NULL, text_report, NULL, league_logo, NULL,
+                        ncol = 7, rel_widths = c(0.25/10, 0.5/10, 4/10, 1/10, 3/10, 1/10, 0.25/10))
+
+    
+    ### FINAL PAGE FORMAT
+    
+    breakdown_tables_align <- plot_grid(table_title_personnel, format_table_personnel, table_title_expenses, format_table_expenses, table_title_revenue, format_table_revenue,
+                                         nrow = 6, rel_heights = c(1.18/10, 2.15/10, 1.19/10, 2.15/10, 1.18/10, 2.15/10)) #Maybe play with these
+    
+    team_breakdown_page <- plot_grid(titles_vizi, breakdown_tables_align, footer, nrow = 3, rel_heights = c(1/10, 8.25/10, .75/10))
+    
+    return(team_breakdown_page)
+    
+  }
+  
+  ############################
+  #### Anonymous Tables ######
+  ############################
+  
+  #Load in data
+  anonymous_data<- read.csv("~/Desktop/Prospect League/pltv_spring_survey_anonymous.csv")
+  
+  #Change zeros to NA
+  anonymous_data[anonymous_data == 0] <- NA
+  
+  #################################    
+  ### Personnel Page ####
+  ################################# 
+  
+  create_page_five <- function() {
+    
+    #Personnel Table
+    personnel <- anonymous_data %>%
+      group_by(team_name) %>%
+      select(head_coach_salary, assistant_coach_total_salary, office_staff, pltv_staff, interns)
+    
+    personnel$'Head Coach Salary' <- currency(personnel$head_coach_salary, digits = 0L)
+    personnel$'Assistant Coach Total Salaries' <- format_dollars(personnel$assistant_coach_total_salary)
+    
+    personnel <- personnel %>% select(-c(head_coach_salary, assistant_coach_total_salary))
+    
+    personnel <- personnel %>%
+      rename('Office Staff' = office_staff,
+             'PLTV Staff' = pltv_staff,
+             'Interns' = interns,
+             'Team' = team_name
+      )
+    
+    #Head Coach
+    head_coach <- personnel %>%
+      select(Team, `Head Coach Salary`) %>%
+      arrange(desc(`Head Coach Salary`))
+    
+    table_align_head <- tableGrob(head_coach, rows = NULL, theme = table_theme)
+    
+    table_align_head<- gtable_add_grob(table_align_head, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_head), l = 1, r = ncol(table_align_head))
+    
+    table_align_head <- gtable_add_grob(table_align_head, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_head))
+    
+    table_align_head <- table_cell_bg(table_align_head, row = which(head_coach$Team == "League Average")+1, column = 1:ncol(head_coach),
+                                      fill="#FFCD00")
+    
+    #Assistant Coach
+    assistant_coach <- personnel %>%
+      select(Team, `Assistant Coach Total Salaries`) %>%
+      arrange(desc(`Assistant Coach Total Salaries`))
+    
+    table_align_assistant <- tableGrob(assistant_coach, rows = NULL, theme = table_theme)
+    
+    table_align_assistant<- gtable_add_grob(table_align_assistant, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_assistant), l = 1, r = ncol(table_align_assistant))
+    
+    table_align_assistant <- gtable_add_grob(table_align_assistant, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_assistant))
+    
+    table_align_assistant <- table_cell_bg(table_align_assistant, row = which(assistant_coach$Team == "League Average")+1, column = 1:ncol(assistant_coach),
+                                           fill="#FFCD00")
+    
+    #Office Staff 
+    office <- personnel %>%
+      select(Team, `Office Staff`) %>%
+      arrange(desc(`Office Staff`))
+    
+    table_align_office <- tableGrob(office, rows = NULL, theme = table_theme)
+    
+    table_align_office<- gtable_add_grob(table_align_office, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_office), l = 1, r = ncol(table_align_office))
+    
+    table_align_office <- gtable_add_grob(table_align_office, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_office))
+    
+    table_align_office <- table_cell_bg(table_align_office, row = which(office$Team == "League Average")+1, column = 1:ncol(office),
+                                        fill="#FFCD00")
+    #Interns
+    interns <- personnel %>%
+      select(Team, `Interns`) %>%
+      arrange(desc(`Interns`))
+    
+    table_align_interns <- tableGrob(interns, rows = NULL, theme = table_theme)
+    
+    table_align_interns<- gtable_add_grob(table_align_interns, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_interns), l = 1, r = ncol(table_align_interns))
+    
+    table_align_interns <- gtable_add_grob(table_align_interns, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_interns))
+    
+    table_align_interns <- table_cell_bg(table_align_interns, row = which(interns$Team == "League Average")+1, column = 1:ncol(interns),
+                                         fill="#FFCD00")
+    ### FORMAT Title
+    
+    page_five_title <- paste("League Personnel", Season)
+    
+    page_five_title <- text_grob(page_five_title, just = "left", face = "plain", color = "black", size = 26, family = "avenir_bold")
+    
+    page_five_title <- plot_grid(page_five_title, NULL, ncol = 2, rel_widths = c(.75/10, 9.25/10))
+    
+    page_five_title <- plot_grid(NULL, page_five_title, nrow = 2, rel_heights = c(1/10, 9/10))
+    
+    
+    #Format Plots
+    
+    format_page_top <- plot_grid(NULL, table_align_head, NULL, table_align_assistant, NULL,
+                                 ncol = 5, rel_widths = c(2/10, 2.75/10, .5/10, 2.75/10, 2/10))
+    
+    format_page_bot <- plot_grid(NULL, table_align_office, NULL, table_align_interns, NULL,
+                                 ncol = 5, rel_widths = c(2/10, 2.75/10, .5/10, 2.75/10, 2/10))
+    
+    format_page <- plot_grid(NULL, format_page_top, NULL, format_page_bot, NULL,
+                             nrow = 5, rel_heights = c(1/10, 3.75/10, .5/10, 3.75/10, 1/10))
+    
+    ### FOOTER FORMAT
+    
+    text_report_footer <- paste0(" League Personnel")
+    
+    text_report_footer <- text_grob(text_report_footer, just = "left", face = "plain", color = "black", size = 12, family = "avenir")
+    
+    text_report <- paste("Prospect League 2022 Financial Review")
+    
+    text_report <- text_grob(text_report, just = "center", face = "plain", color = "black", size = 12, family = "avenir")
+    
+    footer <- plot_grid(NULL, text_report_footer, NULL, text_report, NULL, league_logo, NULL,
+                        ncol = 7, rel_widths = c(0.35/10, 0.5/10, 4/10, 1/10, 3/10, 1/10, 0.15/10))
+    
+    
+    #Format everything together
+    final_arrange <- plot_grid(NULL, page_five_title, format_page, footer,
+                               nrow = 4, rel_heights = c(.5/10, .5/10, 8.25/10, .75/10))
+    
+    page_five <- plot_grid(NULL, final_arrange, NULL,
+                          nrow = 3, rel_heights = c(0.1/10, 9.8/10, 0.1/10))
+    
+    return(page_five)
+    
+  }
+  
+  final_page_five <- create_page_five()
+  
+  
+  ######################   
+  ### Expenses Page ####
+  ######################
+  
+  create_page_six <- function() {
+    
+    #Expense Table
+    expenses <- anonymous_data %>%
+      group_by(team_name) %>%
+      select(operating_expenses, baseball_operations_expenses, personnel_costs, marketing_costs, office_expenses, travel_expenses, stadium_rental_costs) %>%
+      rename('Team' = team_name
+      )
+    
+    expenses$'Operating Expenses' <- currency(expenses$operating_expenses, digits = 0L)
+    expenses$'Baseball Ops Expenses' <- currency(expenses$baseball_operations_expenses, digits = 0L)
+    expenses$'Personnel Costs' <- currency(expenses$personnel_costs, digits = 0L)
+    expenses$'Marketing Costs' <- currency(expenses$marketing_costs, digits = 0L)
+    expenses$'Travel' <- currency(expenses$travel_expenses, digits = 0L)
+    expenses$'Stadium Costs' <- currency(expenses$travel_expenses, digits = 0L)
+    
+    expenses <- expenses %>% select(-c(operating_expenses, baseball_operations_expenses, personnel_costs, marketing_costs, office_expenses, travel_expenses, stadium_rental_costs))
+    
+    #Operating Expenses
+    operating_expenses <- expenses %>%
+      select(Team, `Operating Expenses`) %>%
+      arrange(desc(`Operating Expenses`))
+    
+    table_align_operating_expenses <- tableGrob(operating_expenses, rows = NULL, theme = table_theme)
+    
+    table_align_operating_expenses<- gtable_add_grob(table_align_operating_expenses, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_operating_expenses), l = 1, r = ncol(table_align_operating_expenses))
+    
+    table_align_operating_expenses <- gtable_add_grob(table_align_operating_expenses, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_operating_expenses))
+    
+    table_align_operating_expenses <- table_cell_bg(table_align_operating_expenses, row = which(operating_expenses$Team == "League Average")+1, column = 1:ncol(operating_expenses),
+                                                    fill="#FFCD00")
+    
+    #Baseball Ops Expenses
+    baseball_ops_expenses <- expenses %>%
+      select(Team, `Baseball Ops Expenses`) %>%
+      arrange(desc(`Baseball Ops Expenses`))
+    
+    table_align_baseball_ops_expenses <- tableGrob(baseball_ops_expenses, rows = NULL, theme = table_theme)
+    
+    table_align_baseball_ops_expenses<- gtable_add_grob(table_align_baseball_ops_expenses, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_baseball_ops_expenses), l = 1, r = ncol(table_align_baseball_ops_expenses))
+    
+    table_align_baseball_ops_expenses <- gtable_add_grob(table_align_baseball_ops_expenses, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_baseball_ops_expenses))
+    
+    table_align_baseball_ops_expenses <- table_cell_bg(table_align_baseball_ops_expenses, row = which(baseball_ops_expenses$Team == "League Average")+1, column = 1:ncol(baseball_ops_expenses),
+                                                       fill="#FFCD00")
+    
+    #Personnel Costs
+    personnel_costs <- expenses %>%
+      select(Team, `Personnel Costs`) %>%
+      arrange(desc(`Personnel Costs`))
+    
+    table_align_personnel_costs <- tableGrob(personnel_costs, rows = NULL, theme = table_theme)
+    
+    table_align_personnel_costs<- gtable_add_grob(table_align_personnel_costs, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_personnel_costs), l = 1, r = ncol(table_align_personnel_costs))
+    
+    table_align_personnel_costs <- gtable_add_grob(table_align_personnel_costs, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_personnel_costs))
+    
+    table_align_personnel_costs <- table_cell_bg(table_align_personnel_costs, row = which(personnel_costs$Team == "League Average")+1, column = 1:ncol(personnel_costs),
+                                                 fill="#FFCD00")
+    
+    #Marketing Costs
+    marketing_costs <- expenses %>%
+      select(Team, `Marketing Costs`) %>%
+      arrange(desc(`Marketing Costs`))
+    
+    table_align_marketing_costs <- tableGrob(marketing_costs, rows = NULL, theme = table_theme)
+    
+    table_align_marketing_costs<- gtable_add_grob(table_align_marketing_costs, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_marketing_costs), l = 1, r = ncol(table_align_marketing_costs))
+    
+    table_align_marketing_costs <- gtable_add_grob(table_align_marketing_costs, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_marketing_costs))
+    
+    table_align_marketing_costs <- table_cell_bg(table_align_marketing_costs, row = which(marketing_costs$Team == "League Average")+1, column = 1:ncol(marketing_costs),
+                                                 fill="#FFCD00")
+    
+    #Travel Costs
+    travel_costs <- expenses %>%
+      select(Team, `Travel`) %>%
+      arrange(desc(`Travel`))
+    
+    table_align_travel_costs <- tableGrob(travel_costs, rows = NULL, theme = table_theme)
+    
+    table_align_travel_costs<- gtable_add_grob(table_align_travel_costs, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_travel_costs), l = 1, r = ncol(table_align_travel_costs))
+    
+    table_align_travel_costs <- gtable_add_grob(table_align_travel_costs, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_travel_costs))
+    
+    table_align_travel_costs <- table_cell_bg(table_align_travel_costs, row = which(travel_costs$Team == "League Average")+1, column = 1:ncol(travel_costs),
+                                              fill="#FFCD00")
+    
+    
+    #Stadium Costs
+    stadium_costs <- expenses %>%
+      select(Team, `Stadium Costs`) %>%
+      arrange(desc(`Stadium Costs`))
+    
+    table_align_stadium_costs <- tableGrob(stadium_costs, rows = NULL, theme = table_theme)
+    
+    table_align_stadium_costs<- gtable_add_grob(table_align_stadium_costs, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_stadium_costs), l = 1, r = ncol(table_align_stadium_costs))
+    
+    table_align_stadium_costs <- gtable_add_grob(table_align_stadium_costs, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_stadium_costs))
+    
+    table_align_stadium_costs <- table_cell_bg(table_align_stadium_costs, row = which(stadium_costs$Team == "League Average")+1, column = 1:ncol(stadium_costs),
+                                               fill="#FFCD00")
+    
+    
+    
+    ### FORMAT Title
+    page_six_title <- paste("League Expenses", Season)
+    
+    page_six_title <- text_grob(page_six_title, just = "left", face = "plain", color = "black", size = 26, family = "avenir_bold")
+    
+    page_six_title <- plot_grid(page_six_title, NULL, ncol = 2, rel_widths = c(.75/10, 9.25/10))
+    
+    page_six_title <- plot_grid(NULL, page_six_title, nrow = 2, rel_heights = c(1/10, 9/10))
+    
+    
+    #Format Plots
+    format_page_top <- plot_grid(NULL, table_align_operating_expenses, NULL, table_align_baseball_ops_expenses, NULL, table_align_personnel_costs, NULL,
+                                 ncol = 7, rel_widths = c(.25/10, 3/10, .25/10, 3/10, .25/10, 3/10, .25/10))
+    
+    format_page_bot <- plot_grid(NULL, table_align_marketing_costs, NULL, table_align_travel_costs, NULL, table_align_stadium_costs, NULL,
+                                 ncol = 7, rel_widths = c(.25/10, 3/10, .25/10, 3/10, .25/10, 3/10, .25/10))
+    
+    format_page <- plot_grid(NULL, format_page_top, NULL, format_page_bot, NULL,
+                             nrow = 5, rel_heights = c(1/10, 3.75/10, .5/10, 3.75/10, 1/10))
+    ### FOOTER FORMAT
+    
+    text_report_footer <- paste0(" League Expenses")
+    
+    text_report_footer <- text_grob(text_report_footer, just = "left", face = "plain", color = "black", size = 12, family = "avenir")
+    
+    text_report <- paste("Prospect League 2022 Financial Review")
+    
+    text_report <- text_grob(text_report, just = "center", face = "plain", color = "black", size = 12, family = "avenir")
+    
+    footer <- plot_grid(NULL, text_report_footer, NULL, text_report, NULL, league_logo, NULL,
+                        ncol = 7, rel_widths = c(0.35/10, 0.5/10, 4/10, 1/10, 3/10, 1/10, 0.15/10))
+    
+    
+    #Format everything together
+    final_arrange <- plot_grid(NULL, page_six_title, format_page, footer,
+                               nrow = 4, rel_heights = c(.5/10, .5/10, 8.25/10, .75/10))
+    
+    page_six <- plot_grid(NULL, final_arrange, NULL,
+                            nrow = 3, rel_heights = c(0.1/10, 9.8/10, 0.1/10))
+    
+    
+    return(page_six)
+    
+  }
+  
+  final_page_six <- create_page_six()
+  
+  
+  #####################
+  ### Revenue Page ####
+  #####################
+  
+  create_page_seven <- function() {
+    
+    revenue <- anonymous_data %>%
+      group_by(team_name) %>%
+      mutate(
+        sponsorship_revenue = sponsorship_revenue * 1000,
+        ticket_revenue = ticket_revenue * 1000,
+        merchandise_revenue = merchandise_revenue * 1000,
+        concession_revenue = concession_revenue * 1000
+      ) %>%
+      select(operating_revenue, ticket_revenue, merchandise_revenue, concession_revenue, sponsorship_revenue, other_revenue) %>%
+      rename('Team' = team_name
+      )
+    
+    revenue$'Operating Revenue' <- currency(revenue$operating_revenue, digits = 0L)
+    revenue$'Ticket Revenue' <- currency(revenue$ticket_revenue, digits = 0L)
+    revenue$'Merchandise Revenue' <- currency(revenue$merchandise_revenue, digits = 0L)
+    revenue$'Concession Revenue' <- currency(revenue$concession_revenue, digits = 0L)
+    revenue$'Sponsorship Revenue' <- currency(revenue$sponsorship_revenue, digits = 0L)
+    revenue$'Other Revenue' <-  currency(revenue$sponsorship_revenue, digits = 0L)
+    
+    revenue <- revenue %>% select(-c(operating_revenue, ticket_revenue, merchandise_revenue, concession_revenue, sponsorship_revenue, other_revenue))
+    
+    #Operating Revenue
+    operating_revenue <- revenue %>%
+      select(Team, `Operating Revenue`) %>%
+      arrange(desc(`Operating Revenue`))
+    
+    
+    table_align_operating_revenue <- tableGrob(operating_revenue, rows = NULL, theme = table_theme)
+    
+    table_align_operating_revenue<- gtable_add_grob(table_align_operating_revenue, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_operating_revenue), l = 1, r = ncol(table_align_operating_revenue))
+    
+    table_align_operating_revenue <- gtable_add_grob(table_align_operating_revenue, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_operating_revenue))
+    
+    table_align_operating_revenue <- table_cell_bg(table_align_operating_revenue, row = which(operating_revenue$Team == "League Average")+1, column = 1:ncol(operating_revenue),
+                                                   fill="#FFCD00")
+    
+    #Ticket Revenue
+    ticket_revenue <- revenue %>%
+      select(Team, `Ticket Revenue`) %>%
+      arrange(desc(`Ticket Revenue`))
+    
+    table_align_ticket_revenue <- tableGrob(ticket_revenue, rows = NULL, theme = table_theme)
+    
+    table_align_ticket_revenue<- gtable_add_grob(table_align_ticket_revenue, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_ticket_revenue), l = 1, r = ncol(table_align_ticket_revenue))
+    
+    table_align_ticket_revenue <- gtable_add_grob(table_align_ticket_revenue, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_ticket_revenue))
+    
+    table_align_ticket_revenue <- table_cell_bg(table_align_ticket_revenue, row = which(ticket_revenue$Team == "League Average")+1, column = 1:ncol(ticket_revenue),
+                                                fill="#FFCD00")
+    #Merchandise Revenue
+    merchandise_revenue <- revenue %>%
+      select(Team, `Merchandise Revenue`) %>%
+      arrange(desc(`Merchandise Revenue`))
+    
+    table_align_merchandise_revenue <- tableGrob(merchandise_revenue, rows = NULL, theme = table_theme)
+    
+    table_align_merchandise_revenue<- gtable_add_grob(table_align_merchandise_revenue, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_merchandise_revenue), l = 1, r = ncol(table_align_merchandise_revenue))
+    
+    table_align_merchandise_revenue <- gtable_add_grob(table_align_merchandise_revenue, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_merchandise_revenue))
+    
+    table_align_merchandise_revenue <- table_cell_bg(table_align_merchandise_revenue, row = which(merchandise_revenue$Team == "League Average")+1, column = 1:ncol(merchandise_revenue),
+                                                     fill="#FFCD00")
+    #Concession Revenue
+    concession_revenue <- revenue %>%
+      select(Team, `Concession Revenue`) %>%
+      arrange(desc(`Concession Revenue`))
+    
+    table_align_concession_revenue <- tableGrob(concession_revenue, rows = NULL, theme = table_theme)
+    
+    table_align_concession_revenue<- gtable_add_grob(table_align_concession_revenue, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_concession_revenue), l = 1, r = ncol(table_align_concession_revenue))
+    
+    table_align_concession_revenue <- gtable_add_grob(table_align_concession_revenue, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_concession_revenue))
+    
+    table_align_concession_revenue <- table_cell_bg(table_align_concession_revenue, row = which(concession_revenue$Team == "League Average")+1, column = 1:ncol(concession_revenue),
+                                                    fill="#FFCD00")
+    
+    #Sponsorship Revenue
+    sponsorship_revenue <- revenue %>%
+      select(Team, `Sponsorship Revenue`) %>%
+      arrange(desc(`Sponsorship Revenue`))
+    
+    table_align_sponsorship_revenue <- tableGrob(sponsorship_revenue, rows = NULL, theme = table_theme)
+    
+    table_align_sponsorship_revenue<- gtable_add_grob(table_align_sponsorship_revenue, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_sponsorship_revenue), l = 1, r = ncol(table_align_sponsorship_revenue))
+    
+    table_align_sponsorship_revenue <- gtable_add_grob(table_align_sponsorship_revenue, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_sponsorship_revenue))
+    
+    table_align_sponsorship_revenue <- table_cell_bg(table_align_sponsorship_revenue, row = which(sponsorship_revenue$Team == "League Average")+1, column = 1:ncol(sponsorship_revenue),
+                                                     fill="#FFCD00")
+    
+    other_revenue <- revenue %>%
+      select(Team, `Other Revenue`) %>%
+      arrange(desc(`Other Revenue`))
+    
+    table_align_other_revenue <- tableGrob(other_revenue, rows = NULL, theme = table_theme)
+    
+    table_align_other_revenue<- gtable_add_grob(table_align_other_revenue, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 2, b = nrow(table_align_other_revenue), l = 1, r = ncol(table_align_other_revenue))
+    
+    table_align_other_revenue <- gtable_add_grob(table_align_other_revenue, grobs = rectGrob(gp = gpar(fill = NA, lwd = 2)), t = 1, l = 1, r = ncol(table_align_other_revenue))
+    
+    table_align_other_revenue <- table_cell_bg(table_align_other_revenue, row = which(other_revenue$Team == "League Average")+1, column = 1:ncol(other_revenue),
+                                               fill="#FFCD00")
+    ### FORMAT Title
+    
+    page_seven_title <- paste("League Revenue", Season)
+    
+    page_seven_title <- text_grob(page_seven_title, just = "left", face = "plain", color = "black", size = 26, family = "avenir_bold")
+    
+    page_seven_title <- plot_grid(page_seven_title, NULL, ncol = 2, rel_widths = c(.75/10, 9.25/10))
+    
+    page_seven_title <- plot_grid(NULL, page_seven_title, nrow = 2, rel_heights = c(1/10, 9/10))
+    
+    
+    #Format Plots
+    format_page_top <- plot_grid(NULL, table_align_operating_revenue, NULL, table_align_ticket_revenue, NULL, table_align_merchandise_revenue, NULL,
+                                 ncol = 7, rel_widths = c(.25/10, 3/10, .25/10, 3/10, .25/10, 3/10, .25/10))
+    
+    format_page_bot <- plot_grid(NULL, table_align_concession_revenue, NULL, table_align_sponsorship_revenue, NULL, table_align_other_revenue, NULL,
+                                 ncol = 7, rel_widths = c(.25/10, 3/10, .25/10, 3/10, .25/10, 3/10, .25/10))
+    
+    format_page <- plot_grid(NULL, format_page_top, NULL, format_page_bot, NULL,
+                             nrow = 5, rel_heights = c(1/10, 3.75/10, .5/10, 3.75/10, 1/10))
+    
+    ### FOOTER FORMAT
+    
+    text_report_footer <- paste0(" League Revenue")
+    
+    text_report_footer <- text_grob(text_report_footer, just = "left", face = "plain", color = "black", size = 12, family = "avenir")
+    
+    text_report <- paste("Prospect League 2022 Financial Review")
+    
+    text_report <- text_grob(text_report, just = "center", face = "plain", color = "black", size = 12, family = "avenir")
+    
+    footer <- plot_grid(NULL, text_report_footer, NULL, text_report, NULL, league_logo, NULL,
+                        ncol = 7, rel_widths = c(0.35/10, 0.5/10, 4/10, 1/10, 3/10, 1/10, 0.15/10))
+    
+    
+    #Format everything together
+    final_arrange <- plot_grid(NULL, page_seven_title, format_page, footer,
+                               nrow = 4, rel_heights = c(.5/10, .5/10, 8.25/10, .75/10))
+    
+    page_seven <- plot_grid(NULL, final_arrange, NULL,
+                           nrow = 3, rel_heights = c(0.1/10, 9.8/10, 0.1/10))
+    
+    
+    return(page_seven)
+    
+  }
+  
+  final_page_seven <- create_page_seven()
+  
+  
+  list_individual_team_pages <- list()
+  
+  for (team in selected_teams) {
+    
+    print(team)
+    
+    pages <- create_team_breakdown_page(team)
+    
+    list_individual_team_pages[[team]] <- pages
+    
+  }
+  
+  individual.team.pages <- marrangeGrob(grobs = list_individual_team_pages, nrow = 1, ncol = 1, top = "")
+
+  
+  final_report <- marrangeGrob(grobs = c(list(cover_page, final_page_two, final_page_three, final_page_four), individual.team.pages, list(final_page_five, final_page_six, final_page_seven)), nrow = 1, ncol = 1, top="\n")
+  
+  assign("final_report", final_report, envir = .GlobalEnv)
+  
+}
+
+setwd(local_report_folder)
+
+export_financial_report <- function() {
+  
+  for (team in selected_teams) {
+    
+    league_financial_report(team)
+    
+  }
+  
+  ggexport(final_report, filename = paste0(getwd(), "/Financial Review Final", ".pdf"), width = 13.75, height = 10)
+  
+}
+
+
+export_financial_report()
+
