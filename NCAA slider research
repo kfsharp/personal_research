@@ -1,0 +1,216 @@
+suppressMessages(library(rdrop2))
+suppressMessages(library(plyr))
+suppressMessages(library(dplyr))
+suppressMessages(library(tidyr))
+suppressMessages(library(tidyselect))
+suppressMessages(library(tidyverse))
+suppressMessages(library(data.table))
+
+drop_auth(
+  new_user = FALSE,
+  key = "i3ywecm2mjs65x9",
+  secret = "pmuhxtcb50yct5a",
+  cache = TRUE,
+  rdstoken = '~/Desktop/Iowa Baseball/iowa_db_token.rds'
+)
+
+file_path <- '~/Desktop/Iowa Baseball'
+
+# load('~/Desktop/Iowa Baseball/tm_2023.RData')
+
+source(paste0(file_path, "/GitHub/hawkeye_functions/handling_trackman_functions.R"))
+iowa_db_token <- readRDS(paste0(file_path, "/iowa_db_token.RDS"))
+
+
+#Load in data
+import_trackman_season(2023, merge = TRUE, keep_dfs = FALSE)
+pg_params <- drop_read_csv("Datasets/Trackman/Parameters/pg_params.csv", 
+                           dtoken = iowa_db_token)
+
+
+sliders_r <- tm_2023 %>%
+  filter(pitch_type == 'Slider', pitcher_throws == 'Right', level == 'D1', game_type == 'In-Season') %>%
+  mutate(pitch_type_temp = ifelse(pitch_type == "Splitter", "ChangeUp",
+                                  ifelse(pitch_type == "Sinker", "Fastball", pitch_type)))
+sliders_r <- getPitchGrades(sliders_r)
+
+#Sweeper v non-sweeper movement plot
+ggplot(data = sweep_r, aes(x = horz_break, y = induced_vert_break, color = Type)) + 
+  geom_point() +
+  labs(x = "Horizontal Break (in.)", y = "Vertical Break (in.)", title = "Slider Definitions") + 
+  scale_x_continuous(limits = c(-30, 30),  breaks = c(-30, -20, -10, 0, 10, 20, 30)) + 
+  scale_y_continuous(limits = c(-30, 30),  breaks = c(-30, -20, -10, 0, 10, 20, 30)) +
+  geom_segment(aes(x = 0, y = -30, xend = 0, yend = 30), size = 1, color = "grey55") +
+  geom_segment(aes(x = -30, y = 0, xend = 30, yend = 0), size = 1, color = "grey55") +
+  theme_bw() + theme(text = element_text(size = 12,  family = "Avenir"), panel.grid = element_line(colour = 'gray90', linetype = 'dashed')) +
+  theme(plot.title = element_text(size = 26, face = "bold", hjust = 0.5), axis.text = element_text(size = 16), axis.title = element_text(size = 20, face="bold")) + 
+  theme(legend.position = "right") +
+  labs(fill = "Slider Type") +
+  scale_color_manual(values = c('Traditional' = 'darksalmon', 'Sweeper' = 'dodgerblue', 'Gyro' = 'slateblue2')) +
+  theme(legend.text=element_text(size=16), legend.title = element_text(size=16)) +
+  coord_equal()
+
+
+# R v R
+sweep_r <- sliders_r %>%
+  filter(batter_side == 'Right') %>%
+  mutate(
+  'Type' = ifelse(rel_speed >= 75 & horz_break <= -10 & induced_vert_break <= 8 & induced_vert_break >= -8, 'Sweeper', 
+                   ifelse(horz_break >= -5 & horz_break <= 5 & induced_vert_break <= 5 & induced_vert_break >= -5, 'Gyro', 'Traditional'))
+  )
+
+
+#RHP slider shapes
+shapes <- sweep_r %>%
+  group_by(Type) %>%
+  filter(!is.na(Type)) %>%
+  summarize(
+    velo = mean(rel_speed, na.rm = T),
+    HMov = mean(horz_break, na.rm = T),
+    VMov = mean(induced_vert_break, na.rm = T),
+    stuff = mean(stuff_plus, na.rm = T),
+    location = mean(location_plus, na.rm = T),
+    quality = mean(quality_plus, na.rm = T),
+    count = n(),
+    zone_rate = sum(is_zone == TRUE) / count
+  )
+
+#RHP slider metrics
+metrics <- sweep_r %>%
+  group_by(Type) %>%
+  filter(!is.na(Type)) %>%
+  summarize(
+    'SwStr' = round(100*sum(pitch_call == "StrikeSwinging", na.rm = T) / n(),2),
+    'whiff' = round(100*sum(pitch_call == "StrikeSwinging", na.rm = T) / sum(is_swing == TRUE, na.rm = T),2),
+    'GB%' = as.numeric(round(100*sum(hit_type == "GroundBall", na.rm = T) / sum(!is.na(hit_type)), 2)),
+    'PU%' = as.numeric(round(100*sum(hit_type == "Popup", na.rm = T) / sum(!is.na(hit_type)), 2)),
+    'LD%' = as.numeric(round(100*sum(hit_type == "LineDrive", na.rm = T) / sum(!is.na(hit_type)), 2)),
+    'FB%' = as.numeric(round(100*sum(hit_type == "FlyBall", na.rm = T) / sum(!is.na(hit_type)), 2)),
+    'xioba' = mean(xioba, na.rm = T),
+    'xBA' = mean(xba, na.rm = T),
+    'EV' = mean(exit_speed, na.rm = T),
+    'babip' = round(sum(play_result %in% c("Single", "Double", "Triple", "Homerun", na.rm = TRUE)) /
+                      sum(pitch_call == "InPlay", na.rm = TRUE), 3),
+    'Chase' = round(sum(is_swing == "TRUE" & is_zone == "FALSE", na.rm = TRUE) / sum(is_swing == "TRUE", na.rm = TRUE),2),
+    'HardHit%' = round(sum(pitch_call == "InPlay" & exit_speed >= 95, na.rm = TRUE) / sum(pitch_call == "InPlay", na.rm = TRUE),2)
+  )
+
+
+# R v L
+sweep_l <-  sliders_r%>%
+  filter(batter_side == 'Left') %>%
+  mutate(
+  Type = ifelse(rel_speed >= 75 & horz_break <= -10 & induced_vert_break <= 8 & induced_vert_break >= -8, 'Sweeper', 
+                   ifelse(horz_break >= -5 & horz_break <= 5 & induced_vert_break <= 5 & induced_vert_break >= -5, 'Gyro', 'Traditional'))
+)
+
+#LHP slider metrics
+metrics_l <- sweep_l %>%
+  group_by(Type) %>%
+  filter(!is.na(Type)) %>%
+  summarize(
+    'SwStr' = round(100*sum(pitch_call == "StrikeSwinging", na.rm = T) / n(),2),
+'whiff' = round(100*sum(pitch_call == "StrikeSwinging", na.rm = T) / sum(is_swing == TRUE, na.rm = T),2),
+'GB%' = as.numeric(round(100*sum(hit_type == "GroundBall", na.rm = T) / sum(!is.na(hit_type)), 2)),
+'PU%' = as.numeric(round(100*sum(hit_type == "Popup", na.rm = T) / sum(!is.na(hit_type)), 2)),
+'LD%' = as.numeric(round(100*sum(hit_type == "LineDrive", na.rm = T) / sum(!is.na(hit_type)), 2)),
+'FB%' = as.numeric(round(100*sum(hit_type == "FlyBall", na.rm = T) / sum(!is.na(hit_type)), 2)),
+'xioba' = mean(xioba, na.rm = T),
+'xBA' = mean(xba, na.rm = T),
+'EV' = mean(exit_speed, na.rm = T),
+'babip' = round(sum(play_result %in% c("Single", "Double", "Triple", "Homerun", na.rm = TRUE)) /
+                  sum(pitch_call == "InPlay", na.rm = TRUE), 3),
+'Chase' = round(sum(is_swing == "TRUE" & is_zone == "FALSE", na.rm = TRUE) / sum(is_swing == "TRUE", na.rm = TRUE),2),
+'HardHit%' = round(sum(pitch_call == "InPlay" & exit_speed >= 95, na.rm = TRUE) / sum(pitch_call == "InPlay", na.rm = TRUE),2)
+)
+
+
+#MAKE A TABLE COUNTING SWEEPERS FROM ALL TM DATA
+tm_all <- rbind(tm_2023, tm_2022, tm_2021, tm_2020, tm_2019)
+
+#count sweepers over time
+time <- tm_all %>%
+  filter(pitch_type == 'Slider', pitcher_throws == 'Right', level == 'D1', game_type == 'In-Season') %>%
+  mutate(
+    sweeper = ifelse(rel_speed >= 75 & horz_break <= -10 & induced_vert_break <= 8 & induced_vert_break >= -8, 'sweeper', 
+                     ifelse(horz_break >= -5 & horz_break <= 5 & induced_vert_break <= 5 & induced_vert_break >= -5, 'gyro', 'regular'))
+  ) %>%
+  filter(!is.na(sweeper))
+
+time2 <- time %>%
+  group_by(season) %>%
+  count(sweeper) %>%
+  pivot_wider(names_from = sweeper, values_from = n) %>%
+  mutate(
+    sweeper_percent = sum(sweeper) / sum(sweeper + regular + gyro)
+  )
+
+time3 <- tm_all %>%
+  filter(game_type == 'In-Season') %>%
+  group_by(season) %>%
+  summarize(
+    pitches = n(),
+    slider_rate = sum(pitch_type == 'Slider') / pitches
+  )
+
+#all rhp sweepers
+ggplot(time2, aes(x = season, y = sweeper_percent)) +
+  geom_line(size = 2, color = 'blue') +
+  theme_classic() +
+  labs(x = "Season", y = "Sweeper %", title = "Sweeper % (of all sliders)") +
+  theme(plot.title = element_text(size = 26, face = "bold", hjust = 0.5), axis.text = element_text(size = 16), axis.title=element_text(size=20,face="bold")) +
+  scale_x_continuous(breaks = time2$season)
+
+
+# #all lhp sweepers (less extreme and more volatile)
+# lefty <- tm_full %>%
+#   filter(pitch_type == 'Slider', pitcher_throws == 'Left', level == 'D1', game_type == 'In-Season') %>%
+#   mutate(
+#     sweeper = ifelse(rel_speed > 77 & horz_break >= 10 & induced_vert_break <= 5 & induced_vert_break >= -5, 'sweeper', 'regular')
+#   )
+
+# lefty_2 <- lefty %>%
+#   group_by(season) %>%
+#   count(sweeper) %>%
+#   pivot_wider(names_from = sweeper, values_from = n) %>%
+#   mutate(
+#     percent = sum(sweeper) / sum(sweeper + regular)
+#   )
+
+# ggplot(lefty_2, aes(x = season, y = percent)) +
+#   geom_line(size = 1.3) +
+#   theme_classic() +
+#   labs(x = "Season", y = "Sweeper %", title = "Sweeper % (of all sliders)") +
+#   theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), axis.text = element_text(size = 12))
+
+#determine number of pitchers that throw multiple slider types
+gyro <- sweep_r %>%
+  group_by(pitcher_name, Type) %>%
+  summarize(
+    count = n()
+  ) %>%
+  filter(count >= 15, Type == 'Gyro')
+
+sweeper <- sweep_r %>%
+  group_by(pitcher_name, Type) %>%
+  summarize(
+    count = n()
+  ) %>%
+  filter(count >= 15, Type == 'Sweeper')
+
+traditional <- sweep_r %>%
+  group_by(pitcher_name, Type) %>%
+  summarize(
+    count = n()
+  ) %>%
+  filter(count >= 15, Type == 'Traditional')
+
+total <- left_join(gyro, sweeper, by = 'pitcher_name') %>%
+  na.omit()
+
+#sweeper pop-up rate
+popup <- tm_2023 %>%
+  filter(game_type == 'In-Season', distance <= 230, launch_angle >= 40) %>%
+  summarize(
+    pop = mean(xba, na.rm = T)
+  )
