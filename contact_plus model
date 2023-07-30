@@ -1,0 +1,120 @@
+suppressMessages(library(rdrop2))
+suppressMessages(library(plyr))
+suppressMessages(library(dplyr))
+suppressMessages(library(tidyr))
+suppressMessages(library(tidyselect))
+suppressMessages(library(tidyverse))
+suppressMessages(library(data.table))
+suppressMessages(library(mgcv))
+
+setwd('~/Desktop/Research/')
+
+options(scipen = FALSE)
+
+drop_auth(
+  new_user = FALSE,
+  key = "i3ywecm2mjs65x9",
+  secret = "pmuhxtcb50yct5a",
+  cache = TRUE,
+  rdstoken = '~/Desktop/Iowa Baseball/iowa_db_token.rds'
+)
+
+file_path <- '~/Desktop/Iowa Baseball'
+
+source("~/Desktop/Research/handling_statcast_functions.R")
+
+source(paste0(file_path, "/GitHub/hawkeye_functions/handling_trackman_functions.R"))
+iowa_db_token <- readRDS(paste0(file_path, "/iowa_db_token.RDS"))
+
+#Import statcast data
+import_statcast_season(2022)
+import_statcast_season(2023)
+
+#change variable names
+statcast23 <- statcast2023 %>%
+  rename(
+    rel_side = release_pos_x,
+    rel_height = release_pos_z,
+    horz_break = pfx_x,
+    induced_vert_break = pfx_z,
+    plate_loc_side = plate_x,
+    plate_loc_height = plate_z,
+    xwoba = estimated_woba_using_speedangle,
+    rel_speed = release_speed,
+    batter_name = player_name.y,
+    pitcher_name = player_name.x,
+    extension = release_extension,
+    batter_side = stand
+  ) %>%
+  select(
+    rel_side, rel_height, horz_break, induced_vert_break, plate_loc_side, plate_loc_height, extension, p_throws,
+    rel_speed, pitch_type, batter_name, pitcher_name, game_date, inning, description, bb_type, batter_side, spin_axis, release_spin_rate
+  )
+
+statcast22 <- statcast2022 %>%
+  rename(
+    plate_loc_side = plate_x,
+    plate_loc_height = plate_z,
+    xwoba = estimated_woba_using_speedangle,
+    rel_speed = release_speed,
+    extension = release_extension,
+    batter_side = stand
+  ) %>%
+  select(
+    rel_side, rel_height, horz_break, induced_vert_break, plate_loc_side, plate_loc_height, extension, p_throws,
+    rel_speed, pitch_type, batter_name, pitcher_name, release_spin_rate, game_date, inning, description, bb_type, batter_side, spin_axis
+  )
+
+
+#merge data
+statcast_full <- rbind(statcast22, statcast23) %>%
+  filter(extension <= 9, pitch_type != 'EP', pitch_type != 'PO', pitch_type != 'FA', rel_speed >= 65)
+
+
+df_train <- statcast_full %>%
+  mutate(
+    contact = ifelse(description == 'hit_into_play', 1, 0),
+    swing = ifelse(description %in% c('hit_into_play', 'swinging_strike', 'foul_tip', 'swinging_strike_blocked', 'foul'), 1, 0)
+  ) %>%
+  filter(swing == 1, !description == 'foul') %>%
+  select(batter_name, pitcher_name, contact, swing, pitch_type, rel_side,
+         rel_height, extension, rel_speed, horz_break, induced_vert_break, plate_loc_side, 
+         plate_loc_height, batter_side, description)
+
+
+#train model for xContact
+addTaskCallback(function(...) {set.seed(123); TRUE})
+
+dt <- sample(nrow(df_train), 0.7*nrow(df_train))
+train <- df_train[dt,]
+test <- df_train[-dt,]
+
+model_xcontact_right <- mgcv::gam(contact ~ rel_speed + s(induced_vert_break, horz_break) + s(rel_side, rel_height, extension) 
+                           + s(plate_loc_side, plate_loc_height),
+                           data = train %>% filter(batter_side == 'R'), family = binomial, method = "REML")
+save(model_xcontact_right, file = "~/Desktop/Research/Models/model_xcontact_right.RDS")
+
+model_xcontact_left <- mgcv::gam(contact ~ rel_speed + s(induced_vert_break, horz_break) + s(rel_side, rel_height, extension) 
+                                  + s(plate_loc_side, plate_loc_height),
+                                  data = train %>% filter(batter_side == 'L'), family = binomial, method = "REML")
+save(model_xcontact_left, file = "~/Desktop/Research/Models/model_xcontact_left.RDS")
+
+
+test <- test %>%
+  filter(swing == 1)
+
+test$xcontact_raw <- with(test, ifelse(batter_side == "R", 
+                                     predict(model_xcontact_right, test, type = 'response'),
+                                     ifelse(batter_side == "L", 
+                                            predict(model_xcontact_left, test, type = 'response'),NA)))
+
+
+test <- test %>%
+  mutate(xcontact = ifelse(contact == 1, 1 - xcontact_raw, -xcontact_raw))
+
+
+leader <- test %>%
+  group_by(batter_name) %>%
+  summarize(xcontact = sum(xcontact, na.rm = T),
+            pitches = n()) %>%
+  arrange(desc(xcontact))
